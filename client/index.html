@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Game</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/2.1.1/socket.io.js"></script>
+</head>
+<body>
+<canvas id="ctx" width="500" height="500" style="border: 1px solid green"></canvas>
+<script>
+  var ctx = document.getElementById('ctx').getContext('2d');
+  ctx.font = '30px Arial';
+
+  var socket = io();
+
+  socket.on('newPosition', function (data) {
+    ctx.clearRect(0, 0, 500, 500);
+    for (var i = 0; i < data.length; i++) {
+      ctx.fillText(data[i].number, data[i].x, data[i].y);
+    }
+  });
+
+  document.onkeydown = function (event) {
+    if (event.keyCode === 68) {
+      socket.emit('keyPress', { input: 'right', state: true });
+    }
+    else if (event.keyCode === 83) {
+      socket.emit('keyPress', { input: 'down', state: true });
+    }
+    else if (event.keyCode === 65) {
+      socket.emit('keyPress', { input: 'left', state: true });
+    }
+    else if (event.keyCode === 87) {
+      socket.emit('keyPress', { input: 'up', state: true });
+    }
+  };
+  document.onkeyup = function (event) {
+    if (event.keyCode === 68) {
+      socket.emit('keyPress', { input: 'right', state: false });
+    }
+    else if (event.keyCode === 83) {
+      socket.emit('keyPress', { input: 'down', state: false });
+    }
+    else if (event.keyCode === 65) {
+      socket.emit('keyPress', { input: 'left', state: false });
+    }
+    else if (event.keyCode === 87) {
+      socket.emit('keyPress', { input: 'up', state: false });
+    }
+  };
+</script>
+</body>
+</html>
