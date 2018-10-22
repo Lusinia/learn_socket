@@ -6,12 +6,65 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/2.1.1/socket.io.js"></script>
 </head>
 <body>
-<canvas id="ctx" width="500" height="500" style="border: 1px solid green"></canvas>
+<div id="signIn">
+    Username: <input type="text" id="sign-username">
+    Password: <input type="password" id="sign-passoword">
+    <button id="signin-button">Sing In</button>
+    <button id="signup-button">Sing Up</button>
+</div>
+<div id="gameDiv" style="display: none;">
+    <canvas id="ctx" width="500" height="500" style="border: 1px solid green"></canvas>
+    <div id="chat-text" style="width: 500px; height: 100px; overflow: scroll;">
+        <div>Hello</div>
+    </div>
+    <form id="chat-form">
+        <input type="text" id="chat-input" style="width: 500px;">
+    </form>
+</div>
+
 <script>
+  var socket = io();
+  // sign
+  var signDiv = document.getElementById('signIn');
+  var gameDiv = document.getElementById('gameDiv');
+  var signDivUsername = document.getElementById('sign-username');
+  var signDivPassword = document.getElementById('sign-passoword');
+  var signInButton = document.getElementById('signin-button');
+  var signUpButton = document.getElementById('signup-button');
+
+  signInButton.onclick = function () {
+    socket.emit('signIn', { username: signDivUsername.value, password: signDivPassword.value });
+  };
+
+  signUpButton.onclick = function () {
+    socket.emit('signUp', { username: signDivUsername.value, password: signDivPassword.value });
+  };
+
+  socket.on('signInResponce', function (data) {
+    if (data.success) {
+      console.log('signDiv', signDiv);
+      console.log('gameDiv', gameDiv);
+      signDiv.style.display = 'none';
+      gameDiv.style.display = 'inline-block';
+    } else {
+      alert('SIgn in unsuccessful');
+    }
+  });
+  socket.on('signUpResponce', function (data) {
+    if (data.success) {
+      alert('Signin is successful');
+    } else {
+      alert('Signup is unsuccessful');
+    }
+  });
+
+  // game
   var ctx = document.getElementById('ctx').getContext('2d');
+  var chatText = document.getElementById('chat-text');
+  var chatInput = document.getElementById('chat-input');
+  var chatForm = document.getElementById('chat-form');
   ctx.font = '30px Arial';
 
-  var socket = io();
 
   socket.on('newPosition', function (data) {
     ctx.clearRect(0, 0, 500, 500);
@@ -19,9 +72,25 @@
       ctx.fillText(data.player[i].number, data.player[i].x, data.player[i].y);
     }
     for (var i = 0; i < data.bullet.length; i++) {
-      ctx.fillRect(data.bullet[i].x-5, data.bullet[i].y-5, 10, 10);
+      ctx.fillRect(data.bullet[i].x - 5, data.bullet[i].y - 5, 10, 10);
     }
   });
+  socket.on('addToChat', function (data) {
+    chatText.innerHTML += '<div>' + data + '</div>';
+  });
+  socket.on('evalAnswer', function (data) {
+    console.log('evalAnswer', data);
+  });
+
+  chatForm.onsubmit = function (e) {
+    e.preventDefault();
+    if (chatInput.value[0] === '/') {
+      socket.emit('evalServer', chatInput.value.slice(1));
+    } else {
+      socket.emit('sendMsgToServer', chatInput.value);
+    }
+    chatInput.value = '';
+  };
 
   document.onkeydown = function (event) {
     if (event.keyCode === 68) {
@@ -50,6 +119,22 @@
     else if (event.keyCode === 87) {
       socket.emit('keyPress', { input: 'up', state: false });
     }
+
+    document.onmousedown = function () {
+      socket.emit('keyPress', { input: 'attack', state: true });
+    };
+
+    document.onmouseup = function () {
+      socket.emit('keyPress', { input: 'attack', state: false });
+    };
+    document.onmousemove = function (event) {
+      var screenMiddleX = -250;
+      var screenMiddleY = -250;
+      var x = screenMiddleX + event.clientX - 8;
+      var y = screenMiddleY + event.clientY - 8;
+      var angle = Math.atan2(y, x) / Math.PI * 100;
+      socket.emit('keyPress', { input: 'mouseAngle', state: angle });
+    };
   };
 </script>
 </body>

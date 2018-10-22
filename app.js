@@ -11,6 +11,30 @@ http.listen(2000);
 console.log('Server started');
 
 var SOCKET_LIST = {};
+var DEBUG = true;
+var USERS = {
+  'bob': 'asd',
+  'bob2': 'asdf',
+  'bob3': 'fff',
+};
+
+var isValidPassword = function (data, cb) {
+ setTimeout(function () {
+   cb(USERS[data.username] === data.password)
+ }, 10)
+};
+var isUsernameTaken = function (data, cb) {
+  setTimeout(function () {
+    cb(USERS[data.username])
+  }, 10);
+};
+
+var addUser = function (data, cb) {
+  setTimeout(function () {
+    USERS[data.username] = data.password;
+    cb();
+  }, 10);
+};
 
 var Entity = function () {
   var self = {
@@ -27,33 +51,43 @@ var Entity = function () {
     self.x += self.spdX;
     self.y += self.spdY;
   };
+  self.getDistance = function (pt) {
+    return Math.sqrt(Math.pow(self.x - pt.x, 2) + Math.pow(self.y - pt.y, 2));
+  };
   return self;
 };
-var Bullet = function (angle) {
+var Bullet = function (parent, angle) {
   var self = new Entity();
   self.id = Math.random();
   self.spdX = Math.cos(angle / 180 * Math.PI) * 10;
   self.spdY = Math.sin(angle / 180 * Math.PI) * 10;
+  self.parent = parent;
 
   self.timer = 0;
-  self.toRemove = false;
   var super_update = self.update;
   self.update = function () {
     if (self.timer++ > 100) {
-      self.toRemove = true;
+      Bullet.remove(self.id);
     }
     super_update();
+    for (var i in Player.list) {
+      var p = Player.list[i];
+      if (self.getDistance(p) < 32 && self.parent !== p.id) {
+        Bullet.remove(self.id);
+      }
+    }
   };
   Bullet.list[self.id] = self;
   return self;
 };
 
 Bullet.list = {};
+Bullet.remove = function (id) {
+  delete Bullet.list[id];
+};
 
 Bullet.update = function () {
-  if (Math.random() < 0.1){
-   new Bullet(Math.random()*360);
-  }
+
   var pack = [];
 
   for (var i in Bullet.list) {
@@ -72,12 +106,25 @@ var Player = function (id) {
   self.pressLeft = false;
   self.pressUp = false;
   self.pressDown = false;
+  self.pressAttack = false;
+  self.mouseAngle = 0;
   self.maxSpd = 10;
 
   var super_update = self.update;
   self.update = function () {
     self.updateSpd();
     super_update();
+
+    if (self.pressAttack) {
+      self.shootBullet(self.mouseAngle);
+    }
+  };
+
+
+  self.shootBullet = function (angle) {
+    var b = new Bullet(self.id, angle);
+    b.x = self.x;
+    b.y = self.y;
   };
 
   self.updateSpd = function () {
@@ -120,12 +167,16 @@ Player.onConnect = function (socket) {
     else if (data.input === 'down') {
       player.pressDown = data.state;
     }
+    else if (data.input === 'attack') {
+      player.pressAttack = data.state;
+    }
+    else if (data.input === 'mouseAngle') {
+      player.mouseAngle = data.state;
+    }
   });
 };
 
 Player.onDisconnect = function (socket) {
-  console.log('Player.list', Player.list);
-
   delete Player.list[socket.id];
 };
 
@@ -143,17 +194,53 @@ Player.update = function () {
 io.on('connection', function (socket) {
   socket.id = Math.random();
   SOCKET_LIST[socket.id] = socket;
-  Player.onConnect(socket);
+
+  socket.on('signIn', function (data) {
+    isValidPassword(data, function (res) {
+      if (res) {
+        Player.onConnect(socket);
+        socket.emit('signInResponce', { success: true });
+      } else {
+        socket.emit('signInResponce', { success: false });
+      }
+    })
+  });
+
+  socket.on('signUp', function (data) {
+    isUsernameTaken(data, function (res) {
+      if (res){
+        socket.emit('signUpResponce', { success: false });
+      } else {
+        addUser(data, function () {
+          socket.emit('signUpResponce', { success: true });
+        })
+      }
+    })
+  });
+
   socket.on('disconnect', function () {
     delete SOCKET_LIST[socket.id];
     Player.onDisconnect(socket);
-
   });
+  socket.on('sendMsgToServer', function (data) {
+    var playerName = ('' + socket.id).slice(2, 7);
+    for (var i in SOCKET_LIST) {
+      SOCKET_LIST[i].emit('addToChat', playerName + 'joned');
+    }
+  });
+  socket.on('evalServer', function (data) {
+    if (!DEBUG) {
+      return;
+    }
+    var res = eval(data);
+    socket.emit('evalAnswer', res);
+  });
+
 });
 
 setInterval(function () {
   var pack = {
-    player:  Player.update(),
+    player: Player.update(),
     bullet: Bullet.update()
   };
 
