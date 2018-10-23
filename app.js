@@ -1,7 +1,10 @@
 var express = require('express');
+var mongojs = require('mongojs');
 var app = express();
 var http = require('http').Server(app);
 var io = require('socket.io')(http, {});
+
+var db = mongojs('localhost:27017/myGame', ['account', 'progress']);
 
 app.get('/', function (req, res) {
   res.sendFile(__dirname + '/client/index.html');
@@ -12,28 +15,31 @@ console.log('Server started');
 
 var SOCKET_LIST = {};
 var DEBUG = true;
-var USERS = {
-  'bob': 'asd',
-  'bob2': 'asdf',
-  'bob3': 'fff',
-};
 
 var isValidPassword = function (data, cb) {
- setTimeout(function () {
-   cb(USERS[data.username] === data.password)
- }, 10)
+  try {
+    db.account.find({ username: data.username, password: data.password }, function (err, res) {
+      cb(res.length > 0);
+    });
+  } catch (e) {
+  }
 };
 var isUsernameTaken = function (data, cb) {
-  setTimeout(function () {
-    cb(USERS[data.username])
-  }, 10);
+  try {
+    db.account.find({ username: data.username }, function (err, res) {
+      cb(res.length > 0);
+    });
+  } catch (e) {
+  }
 };
 
 var addUser = function (data, cb) {
-  setTimeout(function () {
-    USERS[data.username] = data.password;
-    cb();
-  }, 10);
+  try {
+    db.account.insert({ username: data.username, password: data.password }, function (err) {
+      cb();
+    });
+  } catch (e) {
+  }
 };
 
 var Entity = function () {
@@ -203,19 +209,19 @@ io.on('connection', function (socket) {
       } else {
         socket.emit('signInResponce', { success: false });
       }
-    })
+    });
   });
 
   socket.on('signUp', function (data) {
     isUsernameTaken(data, function (res) {
-      if (res){
+      if (res) {
         socket.emit('signUpResponce', { success: false });
       } else {
         addUser(data, function () {
           socket.emit('signUpResponce', { success: true });
-        })
+        });
       }
-    })
+    });
   });
 
   socket.on('disconnect', function () {
